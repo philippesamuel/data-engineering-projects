@@ -1,0 +1,10 @@
+**/.env
+**/.envrc
+**/secrets/
+
+**/.venv
+**/__pycache__/
+**/.DS_Store
+**/*.log
+**/*.py.log
+**/logs
