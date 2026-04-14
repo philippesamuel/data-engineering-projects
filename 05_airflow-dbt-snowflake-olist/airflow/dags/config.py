@@ -44,10 +44,6 @@ class SnowflakeSettings(BaseSettings):
 
 
 class Settings(BaseSettings):
-    openweather_api_key: str
-    weather_endpoint: str = Field("http://api.openweathermap.org/data/2.5/weather")
-    city: str = Field("belo horizonte")
-
     snowflake: SnowflakeSettings = Field(default_factory=lambda: SnowflakeSettings())
     model_config = common_config
 
