@@ -13,6 +13,7 @@ from snowflake.connector.pandas_tools import write_pandas
 
 from config import settings
 from mappings import FILE_STEM_TO_TABLE_NAME
+
 sf_settings = settings.snowflake
 
 CHUNK_SIZE = 50_000
@@ -21,8 +22,6 @@ TMP_DIR_PATH = Path("/tmp/olist")
 
 DATA_FILENAMES = list(FILE_STEM_TO_TABLE_NAME)
 
-API = KaggleApi()
-API.authenticate()
 
 
 def download_kaggle_file(name, api: KaggleApi) -> str:
@@ -38,19 +37,18 @@ def download_kaggle_file(name, api: KaggleApi) -> str:
     return str(target_path.absolute())
 
 
-def download_kaggle_files() -> Path:
+def download_kaggle_files(api) -> Path:
     target_path = Path(TMP_DIR_PATH)
     zip_file_path = target_path / "brazilian-ecommerce.zip"
 
-    if not zip_file_path.exists(): 
-        api = API
+    if not zip_file_path.exists():
         logger.info(f"Downloading {DATASET}...")
         success = api.dataset_download_files(dataset=DATASET, path=target_path)
         if success:
             logger.info(f"File downloaded to {target_path}")
 
     else:
-        logger.info(f"File {zip_file_path} already downloaded" )
+        logger.info(f"File {zip_file_path} already downloaded")
 
     logger.info(f"Extracting {zip_file_path}...")
 
@@ -70,10 +68,16 @@ def download_kaggle_files() -> Path:
 def olist_to_snowflake_etl_dag() -> None:
     @task
     def extract_kaggle() -> None:
-        _ = download_kaggle_files()
+        api = KaggleApi()
+        api.authenticate()
+        _ = download_kaggle_files(api)
 
     @task(map_index_template="""{{ input_path_str.split('/')[-1] }}""")
-    def sanitize_csv(input_path_str: str) -> None:
+    def sanitize_csv(
+        input_path_str: str,
+        input_enc="us-ascii",
+        output_enc="utf-8",
+    ) -> None:
         input_path = Path(input_path_str)
         output_path = (
             input_path.with_stem(input_path.stem + "_utf8")
@@ -81,8 +85,8 @@ def olist_to_snowflake_etl_dag() -> None:
             )
 
         # Open input with source encoding and output with target encoding
-        with input_path.open("r", encoding="iso-8859-1", newline="") as source:
-            with output_path.open("w", encoding="utf-8", newline="") as target:
+        with input_path.open("r", encoding=input_enc, newline="") as source:
+            with output_path.open("w", encoding=output_enc, newline="") as target:
                 # Python's file iterator reads line by line (buffered)
                 for line in source:
                     target.write(line)
@@ -92,7 +96,7 @@ def olist_to_snowflake_etl_dag() -> None:
         csv_path = Path(csv_path_str)
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV not found at {csv_path}")
-        df = pl.scan_csv(csv_path_str)
+        df = pl.scan_csv(csv_path_str, encoding="utf-8")
 
         if df.head(1).collect().is_empty():
             raise ValueError(f"CSV at {csv_path} is empty.")
@@ -112,24 +116,27 @@ def olist_to_snowflake_etl_dag() -> None:
         try:
             logger.info(f"Loading {table_name} to Snowflake using write_pandas...")
             # Load the first chunk with overwrite, then append others
-            first_chunck = True
+            first_chunk = True
             for df_chunk in df.collect_batches(chunk_size=CHUNK_SIZE):
                 success, nchunks, nrows, _ = write_pandas(
                     conn=conn,
                     df=df_chunk.to_pandas(),
                     table_name=table_name,
                     auto_create_table=True,  # Handles the 'replace' logic for you
-                    overwrite=first_chunck,  # Overwrites the table if it exists
+                    overwrite=first_chunk,  # Overwrites the table if it exists
                 )
-                first_chunck = False
+                first_chunk = False
 
                 if success:
                     logger.info(f"Successfully loaded {nrows} rows to Snowflake!")
 
+        except Exception as e:
+            logger.error(f"Failed to load {table_name}: {e}")
         finally:
             conn.close()
 
-    @task(trigger_rule="all_success")  # Ensures cleanup runs even if a load fails
+    # Ensures cleanup runs even if a load fails
+    @task(trigger_rule="all_done")
     def cleanup_local_files(directory_path: str) -> None:
         path = Path(directory_path)
         if path.exists() and path.is_dir():
@@ -149,7 +156,7 @@ def olist_to_snowflake_etl_dag() -> None:
         }
         for stem, tname in FILE_STEM_TO_TABLE_NAME.items()
     ]
-    
+
     extract_task = extract_kaggle()
     sanitize_tasks = sanitize_csv.expand(input_path_str=_csv_paths)
     load_tasks = (
@@ -159,7 +166,7 @@ def olist_to_snowflake_etl_dag() -> None:
         )
     cleanup_task = cleanup_local_files(str(TMP_DIR_PATH))
 
-    extract_task >> sanitize_tasks >> load_tasks >> cleanup_task 
+    extract_task >> sanitize_tasks >> load_tasks >> cleanup_task
 
 
 olist_to_snowflake_etl_dag()
