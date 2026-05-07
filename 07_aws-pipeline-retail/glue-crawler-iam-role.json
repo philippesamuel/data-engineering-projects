@@ -1,0 +1,21 @@
+{
+    "Role": {
+        "Path": "/",
+        "RoleName": "AWSGlueServiceRole-onlineRetailCrawler",
+        "RoleId": "AROAYE2ULWGTUFJ32TC6E",
+        "Arn": "arn:aws:iam::560133288359:role/AWSGlueServiceRole-onlineRetailCrawler",
+        "CreateDate": "2026-04-28T09:32:18+00:00",
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "glue.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}

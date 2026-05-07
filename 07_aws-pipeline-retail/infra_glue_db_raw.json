@@ -1,0 +1,7 @@
+{
+    "DatabaseInput": {
+        "Name": "${GLUE_DB_NAME}",
+        "Description": "",
+        "LocationUri": "s3://${S3_BUCKET_NAME}/raw/"
+    }
+}

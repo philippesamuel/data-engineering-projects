@@ -1,0 +1,14 @@
+[project]
+name = "07-aws-pipeline-retail"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "fastexcel>=0.20.1",
+    "marimo>=0.23.3",
+    "obstore>=0.9.4",
+    "plotly>=6.7.0",
+    "polars>=1.40.1",
+    "pydantic-settings>=2.14.0",
+    "streamlit>=1.56.0",
+    "ucimlrepo>=0.0.7",
+]

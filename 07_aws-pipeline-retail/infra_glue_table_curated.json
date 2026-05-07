@@ -1,0 +1,7 @@
+{
+    "DatabaseName": "${GLUE_DB_NAME}",
+    "TableInput": {
+        "Name": "curated",
+        "Description": ""
+    }
+}
